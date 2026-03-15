@@ -1,0 +1,12 @@
+services:
+  anomalib_env:
+    image: my-anomalib-app
+    build: .
+    volumes:
+      - .:/Code
+    working_dir: /Code
+    environment:
+      - TRUST_REMOTE_CODE=1  
+    ipc: host
+    stdin_open: true
+    tty: true
