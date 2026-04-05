@@ -1,12 +1,16 @@
 services:
-  anomalib_env:
-    image: my-anomalib-app
-    build: .
+  vision-aoi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vision-aoi-app
+    ports:
+      - "8000:8000"
     volumes:
-      - .:/Code
-    working_dir: /Code
+      # 將本機當前目錄掛載到容器內的 /Code
+      # 這樣修改程式碼或增減 dataset/weights 時，容器內會即時同步，不需重新 Build
+      - ./:/Code
     environment:
-      - TRUST_REMOTE_CODE=1  
-    ipc: host
-    stdin_open: true
-    tty: true
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
