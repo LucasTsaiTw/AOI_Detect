@@ -1,0 +1,6 @@
+# 忽略以下檔案不包入 Docker 虛擬環境
+aoi_records.db
+__pycache__/
+*.pyc
+.git
+.vscode

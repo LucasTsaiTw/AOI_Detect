@@ -1,12 +1,20 @@
 services:
-  anomalib_env:
-    image: my-anomalib-app
-    build: .
+  vision-aoi:
+  # 透過build指定Dockerfile在當前位置建立映像檔，並命名為vision-aoi-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vision-aoi-app
+    # 將容器內的8000端口映射到主機的8000端口，透過 http://localhost:8000 訪問應用程式
+    ports:
+      - "8000:8000"
     volumes:
-      - .:/Code
-    working_dir: /Code
+      # 將專案目錄掛載到容器內的 /Code，使得修改程式碼時，容器內會即時同步，不需重新 Build
+      - ./:/Code
+      - ./dataset:/code/dataset
     environment:
-      - TRUST_REMOTE_CODE=1  
-    ipc: host
-    stdin_open: true
-    tty: true
+      - PYTHONUNBUFFERED=1
+    # 除非主動停止，否則容器會自動重啟，確保應用程式持續運行
+    restart: unless-stopped
+    # 透過網頁伺服器 uvicorn 啟動 FastAPI 應用程式
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

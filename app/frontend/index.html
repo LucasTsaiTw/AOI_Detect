@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<!-- 前端主頁面 -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOI 智慧品管監控系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .log-item { animation: slideDown 0.2s ease-out forwards; }
+        .accordion-content { transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out; overflow: hidden; }
+        .accordion-content.collapsed { max-height: 0; opacity: 0; }
+        .accordion-content.expanded { max-height: 3000px; opacity: 1; }
+    </style>
+</head>
+
+<!-- 左側為統計分析與歷史紀錄的側邊欄，右側為推論結果展示區 -->
+<body class="bg-slate-50 text-slate-800 h-screen overflow-hidden flex font-sans text-sm relative">
+    <!-- 登入畫面，預設為隱藏，未認證狀態下顯示 -->
+    <div id="loginView" class="fixed inset-0 bg-slate-100 z-[100] flex items-center justify-center">
+        <div class="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
+            <div class="text-center mb-8">
+                <div class="font-black text-3xl tracking-tighter mb-2">Vision<span class="text-blue-600">AOI</span></div>
+                <p class="text-xs font-bold text-slate-400 tracking-widest uppercase">智慧品管監控系統</p>
+            </div>
+            <!-- 登入表單，包含帳號、密碼欄位，以及錯誤訊息顯示區域 -->
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-5">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">帳號 (Username)</label>
+                    <input type="text" id="username" required class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg px-4 py-2.5 outline-none font-bold text-sm focus:border-blue-500 focus:bg-white transition-colors">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">密碼 (Password)</label>
+                    <input type="password" id="password" required class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg px-4 py-2.5 outline-none font-bold text-sm focus:border-blue-500 focus:bg-white transition-colors">
+                </div>
+                <div id="loginError" class="hidden text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded text-center">
+                    帳號或密碼錯誤
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-lg shadow-md transition-all active:scale-95 flex justify-center items-center gap-2">
+                    登入系統
+                </button>
+            </form>
+        </div>
+    </div>
+    <!-- 側邊欄包含統計分析、歷史紀錄列表，以及匯出報表的按鈕 -->
+    <aside id="sidebar" class="w-80 shrink-0 transition-all duration-300 ease-in-out overflow-hidden bg-white border-r border-slate-200 flex flex-col shadow-sm z-30">
+        <div class="w-80 flex flex-col h-full">
+            <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-col gap-3 shrink-0">
+                <div class="flex justify-between items-center">
+                    <span class="font-black text-slate-500 text-[10px] uppercase tracking-widest">展開類別統計分析</span>
+                    <span id="totalLogCount" class="bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full">0 筆</span>
+                </div>
+                <!-- 過殺與漏檢的統計數字，點擊後可套用篩選條件，並在下方顯示篩選狀態 -->
+                <div class="flex gap-2 text-[10px] font-bold">
+                    <div id="statEscapeBox" onclick="toggleFilter('escape')" class="cursor-pointer flex-1 bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded border border-yellow-200 flex justify-between items-center shadow-sm transition-all hover:bg-yellow-100" title="點擊過濾：漏檢">
+                        <span>漏檢</span>
+                        <span id="statEscape" class="text-base">0</span>
+                    </div>
+                    <div id="statOverkillBox" onclick="toggleFilter('overkill')" class="cursor-pointer flex-1 bg-orange-50 text-orange-700 px-3 py-1.5 rounded border border-orange-200 flex justify-between items-center shadow-sm transition-all hover:bg-orange-100" title="點擊過濾：過殺">
+                        <span>過殺</span>
+                        <span id="statOverkill" class="text-base">0</span>
+                    </div>
+                </div>
+                <div id="filterStatus" class="hidden text-[9px] font-bold text-blue-500 text-center bg-blue-50 py-1 rounded">篩選條件套用中 (點擊上方取消)</div>
+            </div>
+            <!-- 系統判定信心分佈的圖表區域，包含標題與匯出按鈕 -->
+            <div class="p-4 border-b border-slate-100 bg-white shrink-0">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-black text-slate-500 text-[10px] uppercase tracking-widest">系統判定信心分佈</span>
+                    <button onclick="exportChart()" class="text-slate-400 hover:text-blue-600 transition-colors p-1 rounded hover:bg-slate-50 active:scale-95" title="匯出分佈直方圖 (PNG)">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    </button>
+                </div>
+                <div class="h-36 w-full relative">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+            <!-- 歷史紀錄列表區域，預設顯示等待訊息，抽樣後會動態更新為檢測紀錄 -->
+            <div id="historyList" class="flex-1 overflow-y-auto p-3 bg-slate-50/50">
+                <div id="emptyLog" class="text-center text-slate-400 py-10 text-xs">等待機台啟動抽檢程序...</div>
+            </div>
+
+            <div class="p-3 border-t border-slate-200 bg-white shrink-0">
+                <button onclick="exportCSV()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded shadow flex items-center justify-center gap-2 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    匯出當前類別檢測報表
+                </button>
+            </div>
+        </div>
+    </aside>
+    <!-- 主內容區域包含頁面標題、推論結果展示區，以及控制按鈕 -->
+    <main class="flex-1 flex flex-col relative min-w-0">
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-20 shadow-sm shrink-0">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleSidebar()" class="text-slate-400 hover:text-blue-600 transition-colors" title="收合/展開歷史紀錄">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <div class="font-black text-xl tracking-tighter">Vision<span class="text-blue-600">AOI</span></div>
+            </div>
+            <!-- 類別選擇下拉選單，以及返回主管中心與登出按鈕 -->
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-inner">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+
+                <div class="h-6 w-px bg-slate-200"></div>
+                
+                <select id="category" onchange="initDataset()" class="bg-white border border-slate-200 text-slate-700 rounded px-2 py-1 outline-none font-bold text-xs cursor-pointer focus:border-blue-500 transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed w-48">
+                    <option value="">  載入類別中...</option>
+                </select>
+
+                <div class="h-6 w-px bg-slate-200"></div>
+
+                <div class="flex items-center gap-2">
+                    <button id="backToManagerBtn" onclick="window.location.href='/static/manager.html'" class="hidden text-blue-600 font-bold text-xs flex items-center gap-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-1.5 rounded transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        <span class="px-1">返回主管中心</span>
+                    </button>
+                    <button onclick="handleLogout()" class="text-slate-500 hover:text-rose-600 font-bold text-xs flex items-center gap-1 bg-slate-100 hover:bg-rose-50 px-2 py-1.5 rounded transition-colors" title="登出">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        <span class="px-1">登出</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+        
+        <div class="flex-1 p-6 relative flex flex-col overflow-y-auto">
+            <div id="loading" class="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center hidden">
+                <div class="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mb-2"></div>
+                <span class="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Processing...</span>
+            </div>
+
+            <div class="flex justify-center mb-6 gap-4 shrink-0">
+                <button onclick="drawNext()" id="nextBtn" disabled class="group bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-black text-sm shadow-md transition-all active:scale-95 flex items-center gap-2 disabled:cursor-not-allowed">
+                    單次資料庫抽樣 
+                </button>
+                
+                <button onclick="toggleAutoRun()" id="autoRunBtn" disabled class="group bg-slate-800 hover:bg-slate-900 text-white w-48 py-3 rounded-xl font-black text-sm shadow-md transition-all active:scale-95 flex justify-center items-center gap-2 disabled:cursor-not-allowed">
+                    自動連續執行
+                </button>
+            </div>
+            <!-- 推論結果展示區，包含影像檔名、真實解答、異常分數、最終判定，以及原始影像與定位熱力圖的展示 -->
+            <div id="resultArea" class="hidden flex-1 flex flex-col min-h-[500px]">
+                <div class="grid grid-cols-4 gap-4 mb-6 shrink-0">
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden">
+                        <div class="w-1 h-full bg-slate-300 absolute left-0 top-0"></div>
+                        <p class="text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">影像檔名 (FILE)</p>
+                        <p class="font-mono font-bold text-slate-600 truncate text-xs" id="resImageName">-</p>
+                    </div>
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden">
+                        <div class="w-1 h-full bg-indigo-400 absolute left-0 top-0"></div>
+                        <p class="text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">真實解答 (GROUND TRUTH)</p>
+                        <p class="font-bold text-slate-600 text-xs truncate" id="resTrueLabel">-</p>
+                    </div>
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden">
+                        <div class="w-1 h-full bg-blue-500 absolute left-0 top-0"></div>
+                        <p class="text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">異常分數 (SCORE)</p>
+                        <p class="text-xl font-mono font-black text-blue-600" id="resScore">- %</p>
+                    </div>
+                    <div id="panelLabel" class="p-3.5 rounded-xl border shadow-sm transition-all relative overflow-hidden">
+                        <div id="panelLabelLine" class="w-1 h-full bg-slate-300 absolute left-0 top-0"></div>
+                        <div class="flex justify-between items-start">
+                            <p class="text-[9px] font-bold opacity-60 mb-1 uppercase tracking-wider">最終判定 (RESULT)</p>
+                            <span id="dashboardWarning" class="hidden"></span>
+                        </div>
+                        <h2 class="text-lg font-black" id="resLabel">-</h2>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-6 flex-1 min-h-[300px]">
+                    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col h-full">
+                        <div class="bg-slate-50 px-3 py-2 text-[9px] font-bold text-slate-400 border-b border-slate-100">ORIGINAL RAW</div>
+                        <div class="p-2 flex items-center justify-center bg-slate-50/50 flex-1 relative min-h-0">
+                            <img id="origImage" src="" class="absolute max-w-full max-h-full object-contain drop-shadow-sm p-2">
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col h-full">
+                        <div class="bg-blue-50/50 px-3 py-2 flex justify-between items-center border-b border-blue-100">
+                            <span class="text-[9px] font-bold text-blue-600">DEFECT LOCATING</span>
+                            <button id="heatmapToggle" onclick="toggleHeatmap()" class="text-[10px] font-bold px-3 py-0.5 rounded border transition-colors bg-white border-blue-300 text-blue-600 hover:bg-blue-100 shadow-sm active:scale-95">
+                                顯示熱力圖
+                            </button>
+                        </div>
+                        <div class="p-2 flex items-center justify-center bg-slate-50/50 flex-1 relative min-h-0">
+                            <img id="resImage" src="" class="absolute max-w-full max-h-full object-contain drop-shadow-sm transition-opacity duration-300 p-2">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="emptyState" class="h-full flex flex-col items-center justify-center text-slate-300">
+                <svg class="w-12 h-12 mb-3 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                <div class="text-xs font-bold tracking-widest uppercase">System Ready</div>
+                <div class="text-[10px] mt-1 opacity-70">類別載入完成，請點擊上方按鈕開始檢測</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ==================== 認證與授權邏輯 ====================
+        
+        function getAuthHeader() {
+            return { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` };
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            const role = localStorage.getItem('role');
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const mode = urlParams.get('mode');
+            
+            if (token) {
+                if (role === 'admin') {
+                    window.location.href = '/static/admin.html';
+                    return;
+                } else if (role === 'manager' && mode !== 'view') {
+                    window.location.href = '/static/manager.html';
+                    return;
+                }
+                
+                document.getElementById('loginView').classList.add('hidden');
+                
+                if (role === 'manager') {
+                    document.getElementById('backToManagerBtn').classList.remove('hidden');
+                }
+                
+                initChart();
+                loadCategories(); 
+            } else {
+                document.getElementById('loginView').classList.remove('hidden');
+            }
+        }
+        // 檢查使用者認證狀態，根據角色導向不同頁面，並初始化圖表與載入類別 
+        async function loadCategories() {
+            try {
+                const res = await fetch('/api/categories', { headers: getAuthHeader() });
+                // 如果 Token 失效，強制登出
+                if (res.status === 401) {
+                    handleLogout();
+                    return;
+                }
+                if (!res.ok) throw new Error("無法載入類別");
+                const data = await res.json();
+                
+                const select = document.getElementById('category');
+                select.innerHTML = ''; 
+                
+                data.categories.forEach(cat => {
+                    select.innerHTML += `<option value="${cat.category_code}">${cat.display_name}</option>`;
+                });
+
+                if(data.categories.length > 0) {
+                    initDataset();
+                } else {
+                    select.innerHTML = '<option value="">(無資料，請至後台新增)</option>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        // 從後端 API 載入類別列表，更新下拉選單，並處理認證失效的情況
+        async function handleLogin(event) {
+            event.preventDefault();
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const errObj = document.getElementById('loginError');
+            
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ username: user, password: pass })
+                });
+                
+                if (!res.ok) throw new Error("登入失敗");
+                
+                const data = await res.json();
+                
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('role', data.role);
+                
+                errObj.classList.add('hidden');
+                
+                if (data.role === 'manager') {
+                    window.location.href = '/static/manager.html';
+                } else {
+                    checkAuth();
+                }
+            } catch (e) {
+                errObj.innerText = "帳號或密碼錯誤";
+                errObj.classList.remove('hidden');
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('role');
+            window.location.href = '/'; 
+        }
+
+        // ==================== AOI 推論 ====================
+
+        let globalHistory = {};     
+        let collapsedState = {};    
+        let collapsedFolderState = {}; 
+        
+        let imagePool = [];         
+        let currentCategory = "";   
+        let currentViewData = null; 
+
+        let filterOverkill = false;
+        let filterEscape = false;
+        let isAutoRunning = false;  
+        let showHeatmap = false;    
+        
+        let trendChart = null; 
+
+        const chartDataLabelsPlugin = {
+            id: 'chartDataLabels',
+            afterDatasetsDraw(chart) {
+                const { ctx, data } = chart;
+                ctx.save();
+                chart.getDatasetMeta(0).data.forEach((datapoint, index) => {
+                    const value = data.datasets[0].data[index];
+                    if (value > 0) { 
+                        ctx.font = 'bold 10px sans-serif';
+                        ctx.fillStyle = '#64748b'; 
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        ctx.fillText(value, datapoint.x, datapoint.y - 4); 
+                    }
+                });
+                ctx.restore();
+            }
+        };
+        // Chart.js 插件：在柱狀圖上方顯示數值標籤，當數值大於 0 時才顯示標籤
+        const customCanvasBackgroundColor = {
+            id: 'customCanvasBackgroundColor',
+            beforeDraw: (chart, args, options) => {
+                const {ctx} = chart;
+                ctx.save();
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = options.color || '#ffffff';
+                ctx.fillRect(0, 0, chart.width, chart.height);
+                ctx.restore();
+            }
+        };
+
+        function initChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            
+            trendChart = new Chart(ctx, {
+                type: 'bar',
+                plugins: [chartDataLabelsPlugin, customCanvasBackgroundColor], 
+                data: {
+                    labels: ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'],
+                    datasets: [{
+                        label: '樣本數',
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.8)',   
+                            'rgba(52, 211, 153, 0.6)',   
+                            'rgba(250, 204, 21, 0.8)',   
+                            'rgba(249, 115, 22, 0.8)',   
+                            'rgba(239, 68, 68, 0.8)'     
+                        ],
+                        borderRadius: 4,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    layout: { padding: { top: 15 } },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f8fafc' }, ticks: { font: { size: 9 }, color: '#94a3b8', stepSize: 5 } },
+                        x: { grid: { display: false }, ticks: { font: { size: 9 }, color: '#64748b' } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        customCanvasBackgroundColor: { color: 'white' },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { size: 11 }, bodyFont: { size: 12, weight: 'bold' },
+                            padding: 10, cornerRadius: 6, displayColors: false,
+                            callbacks: {
+                                title: function(context) { return "分數區間: " + context[0].label; },
+                                label: function(context) { return "累積樣本: " + context.parsed.y + " 筆"; }
+                            }
+                        }
+                    },
+                    animation: { duration: 400 }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (!trendChart) initChart();
+            if (!currentCategory || !globalHistory[currentCategory]) return;
+
+            const logs = globalHistory[currentCategory];
+            let bins = [0, 0, 0, 0, 0];
+
+            logs.forEach(log => {
+                let s = log.score;
+                if (s < 20) bins[0]++;
+                else if (s < 40) bins[1]++;
+                else if (s < 60) bins[2]++;
+                else if (s < 80) bins[3]++;
+                else bins[4]++;
+            });
+
+            const maxBin = Math.max(...bins);
+            trendChart.options.scales.y.suggestedMax = maxBin > 0 ? maxBin * 1.2 : 5; 
+
+            trendChart.data.datasets[0].data = bins;
+            trendChart.update();
+        }
+
+        function exportChart() {
+            if (!trendChart || !currentCategory) return alert("目前沒有圖表可以匯出！請先載入分類並抽樣。");
+            const canvas = document.getElementById('trendChart');
+            const link = document.createElement('a');
+            link.download = `AOI_Distribution_${currentCategory.toUpperCase()}_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.png`;
+            link.href = canvas.toDataURL('image/png', 1.0);
+            link.click();
+            link.remove();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.classList.contains('w-80')) {
+                sidebar.classList.replace('w-80', 'w-0');
+                sidebar.classList.add('opacity-0');
+                sidebar.classList.remove('border-r');
+            } else {
+                sidebar.classList.replace('w-0', 'w-80');
+                sidebar.classList.remove('opacity-0');
+                sidebar.classList.add('border-r');
+            }
+        }
+
+        function setButtonsDefault() {
+            document.getElementById('autoRunBtn').innerHTML = '自動連續執行';
+            document.getElementById('autoRunBtn').className = "group bg-slate-800 hover:bg-slate-900 text-white w-48 py-3 rounded-xl font-black text-sm shadow-md transition-all active:scale-95 flex justify-center items-center gap-2";
+            document.getElementById('autoRunBtn').disabled = false;
+
+            document.getElementById('nextBtn').innerHTML = '單次資料庫抽樣';
+            document.getElementById('nextBtn').className = "group bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-black text-sm shadow-md transition-all active:scale-95 flex items-center gap-2";
+            document.getElementById('nextBtn').disabled = false;
+        }
+
+        function setButtonsEmpty() {
+            document.getElementById('autoRunBtn').innerHTML = '[ 執行完畢 ]';
+            document.getElementById('autoRunBtn').className = "group bg-slate-200 text-slate-500 w-48 py-3 rounded-xl font-black text-sm shadow-sm transition-all flex justify-center items-center gap-2 cursor-not-allowed";
+            document.getElementById('autoRunBtn').disabled = true;
+
+            document.getElementById('nextBtn').innerHTML = '無樣本可抽';
+            document.getElementById('nextBtn').className = "group bg-slate-200 text-slate-500 px-8 py-3 rounded-xl font-black text-sm shadow-sm transition-all flex items-center gap-2 cursor-not-allowed";
+            document.getElementById('nextBtn').disabled = true;
+        }
+        // 控制側邊欄的展開與收合，以及推論結果的展示與圖表更新
+        function updateTopStats() {
+            let activeRecords = 0;
+            let activeOverkill = 0;
+            let activeEscape = 0;
+            
+            for (let cat in globalHistory) {
+                if (collapsedState[cat] === false) {
+                    activeRecords += globalHistory[cat].length;
+                    globalHistory[cat].forEach(item => {
+                        const isTrueNormal = item.true_label.includes("正常") || item.true_label.includes("Good");
+                        const isPredNormal = item.pred_label.includes("正常") || item.pred_label.includes("OK");
+                        if (isTrueNormal && !isPredNormal) activeOverkill++;
+                        if (!isTrueNormal && isPredNormal) activeEscape++;
+                    });
+                }
+            }
+
+            document.getElementById('totalLogCount').innerText = `${activeRecords} 筆`;
+            document.getElementById('statOverkill').innerText = activeOverkill;
+            document.getElementById('statEscape').innerText = activeEscape;
+        }
+        // 更新統計數字，根據目前展開的類別計算過殺與漏檢的數量，並更新圖表數據
+        function toggleHeatmap() {
+            showHeatmap = !showHeatmap;
+            const btn = document.getElementById('heatmapToggle');
+            if (showHeatmap) {
+                btn.innerText = "顯示定位框";
+                btn.className = "text-[10px] font-bold px-3 py-0.5 rounded border transition-colors bg-blue-600 border-blue-600 text-white shadow-sm active:scale-95";
+            } else {
+                btn.innerText = "顯示熱力圖";
+                btn.className = "text-[10px] font-bold px-3 py-0.5 rounded border transition-colors bg-white border-blue-300 text-blue-600 hover:bg-blue-100 shadow-sm active:scale-95";
+            }
+            renderResultImage();
+        }
+        // 切換熱力圖與原始影像的顯示，並更新按鈕樣式以反映當前狀態
+        function renderResultImage() {
+            if (!currentViewData) return;
+            const imgEl = document.getElementById('resImage');
+            
+            imgEl.style.opacity = 0.5;
+            setTimeout(() => {
+                if (showHeatmap && currentViewData.heatmap_image_base64) {
+                    imgEl.src = "data:image/jpeg;base64," + currentViewData.heatmap_image_base64;
+                } else {
+                    imgEl.src = "data:image/jpeg;base64," + currentViewData.result_image_base64;
+                }
+                imgEl.style.opacity = 1;
+            }, 100);
+        }
+        // 匯出 CSV 報表
+        function exportCSV() {
+            if (!currentCategory || !globalHistory[currentCategory] || globalHistory[currentCategory].length === 0) {
+                return alert("目前沒有可匯出的檢測資料！請先執行抽樣。");
+            }
+            
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "檢測流水號,影像檔名,真實解答,異常分數(%),系統判定,檢測結論,運算耗時(ms)\n";
+
+            let logs = globalHistory[currentCategory];
+            logs.forEach((item, index) => {
+                const isTrueNormal = item.true_label.includes("正常") || item.true_label.includes("Good");
+                const isPredNormal = item.pred_label.includes("正常") || item.pred_label.includes("OK");
+                
+                let conclusion = "準確";
+                if (isTrueNormal && !isPredNormal) conclusion = "過殺 (Overkill)";
+                if (!isTrueNormal && isPredNormal) conclusion = "漏檢 (Escape)";
+
+                let row = [
+                    logs.length - index,
+                    item.image_name,
+                    item.true_label,
+                    item.score,
+                    item.pred_label,
+                    conclusion,
+                    item.inference_time_ms || 0
+                ].join(",");
+                
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `AOI_Report_${currentCategory.toUpperCase()}_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        // 根據目前類別的檢測紀錄生成 CSV 格式的報表，並觸發下載，檔名包含類別名稱與日期
+        async function initDataset() {
+            if (isAutoRunning) return alert("請先停止自動執行");
+            
+            const categorySelect = document.getElementById('category');
+            if(!categorySelect.value) return; // 防呆
+            
+            const newCategory = categorySelect.value;
+            categorySelect.disabled = true; 
+            
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('resultArea').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            
+            try {
+                const res = await fetch(`/api/inference/${newCategory}/images`, {
+                    headers: getAuthHeader()
+                });
+                
+                if (res.status === 401) {
+                    handleLogout();
+                    return;
+                }
+                if (!res.ok) throw new Error("伺服器無回應或找不到資料集");
+                
+                const data = await res.json();
+                
+                currentCategory = newCategory;
+                imagePool = data.images;
+                
+                if (!globalHistory[currentCategory]) globalHistory[currentCategory] = [];
+                
+                for (let cat in collapsedState) collapsedState[cat] = true;
+                collapsedState[currentCategory] = false;
+
+                filterOverkill = false;
+                filterEscape = false;
+                updateFilterUI();
+                setButtonsDefault();
+                
+                document.getElementById('inferenceTime').innerText = "-- ms / img";
+                
+                renderHistory(); 
+                
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('emptyState').classList.remove('hidden');
+            } catch(e) { 
+                alert("無法載入資料: " + e.message); 
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('emptyState').classList.remove('hidden');
+            } finally {
+                categorySelect.disabled = false; 
+            }
+        }
+        // 初始化資料集：根據選擇的類別從後端載入待檢測影像列表，更新 UI 狀態，並處理認證失效的情況
+        async function toggleAutoRun() {
+            const autoBtn = document.getElementById('autoRunBtn');
+            const categorySelect = document.getElementById('category');
+            
+            if (isAutoRunning) {
+                isAutoRunning = false;
+                setButtonsDefault();
+                categorySelect.disabled = false;
+                return;
+            }
+
+            if (imagePool.length === 0) return alert("圖庫內所有樣本皆已抽檢完畢！");
+
+            isAutoRunning = true;
+            document.getElementById('nextBtn').disabled = true;
+            categorySelect.disabled = true; 
+
+            while(imagePool.length > 0 && isAutoRunning) {
+                const path = imagePool.pop();
+                await executeInference(path);
+
+                if (!isAutoRunning) break; 
+                if (imagePool.length === 0) {
+                    setButtonsEmpty();
+                    break;
+                }
+
+                autoBtn.className = "group bg-rose-600 hover:bg-rose-700 text-white w-48 py-3 rounded-xl font-black text-sm shadow-md transition-all active:scale-95 flex justify-center items-center gap-2";
+                autoBtn.innerHTML = `執行中 (1s)...`;
+                
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
+            isAutoRunning = false;
+            categorySelect.disabled = false; 
+            if(imagePool.length > 0) {
+                setButtonsDefault();
+            }
+        }
+        // 控制自動連續執行的開始與停止，根據狀態更新按鈕樣式與功能，並在自動執行過程中逐一抽取影像進行推論
+        function drawNext() {
+            if (imagePool.length === 0) {
+                setButtonsEmpty();
+                return alert("圖庫內所有樣本皆已抽檢完畢！");
+            }
+            const path = imagePool.pop();
+            executeInference(path);
+            
+            if (imagePool.length === 0) {
+                setButtonsEmpty();
+            }
+        }
+        // 單次抽樣執行：從圖庫中抽取一張影像，呼叫後端 API 進行推論，更新 UI 顯示結果，並處理可能的錯誤與認證失效
+        async function executeInference(path) {
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            
+            try {
+                const res = await fetch(`/api/inference/${currentCategory}/infer?file_path=${encodeURIComponent(path)}`, {
+                    headers: getAuthHeader()
+                });
+                
+                if (res.status === 401) {
+                    handleLogout();
+                    return;
+                }
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "伺服器發生未知錯誤");
+                
+                globalHistory[currentCategory].unshift(data);
+                
+                updateUI(data);
+                renderHistory();
+                
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('resultArea').classList.remove('hidden');
+
+            } catch(e) {
+                alert("後端回報錯誤: " + e.message);
+                document.getElementById('loading').classList.add('hidden');
+                isAutoRunning = false; 
+                setButtonsDefault();
+                document.getElementById('category').disabled = false;
+            }
+        }
+        // 呼叫後端 API 進行影像推論，根據回傳結果更新全局歷史紀錄，並刷新 UI 顯示最新的推論結果與統計資訊
+        function updateUI(data) {
+            currentViewData = data; 
+            
+            document.getElementById('resImageName').innerText = data.image_name;
+            document.getElementById('resTrueLabel').innerText = data.true_label;
+            document.getElementById('resScore').innerText = data.score + " %";
+            document.getElementById('inferenceTime').innerText = data.inference_time_ms + " ms / img";
+            
+            const labelEl = document.getElementById('resLabel');
+            labelEl.innerText = data.pred_label;
+            
+            const panel = document.getElementById('panelLabel');
+            const panelLine = document.getElementById('panelLabelLine');
+            const warningEl = document.getElementById('dashboardWarning');
+            
+            const isTrueNormal = data.true_label.includes("正常") || data.true_label.includes("Good");
+            const isPredNormal = data.pred_label.includes("正常") || data.pred_label.includes("OK");
+
+            if (isTrueNormal && !isPredNormal) {
+                warningEl.innerHTML = '過殺';
+                warningEl.className = 'text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded shadow-sm';
+            } else if (!isTrueNormal && isPredNormal) {
+                warningEl.innerHTML = '漏檢';
+                warningEl.className = 'text-[9px] font-bold bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded shadow-sm';
+            } else {
+                warningEl.className = 'hidden';
+            }
+
+            if(data.pred_label.includes("異常") || data.pred_label.includes("NG")) {
+                labelEl.className = "text-lg font-black text-red-700";
+                panel.className = "p-3.5 rounded-xl border border-red-200 bg-red-50 shadow-sm relative overflow-hidden";
+                panelLine.className = "w-1 h-full bg-red-500 absolute left-0 top-0";
+            } else {
+                labelEl.className = "text-lg font-black text-emerald-700";
+                panel.className = "p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 shadow-sm relative overflow-hidden";
+                panelLine.className = "w-1 h-full bg-emerald-500 absolute left-0 top-0";
+            }
+            
+            document.getElementById('origImage').src = "data:image/jpeg;base64," + data.original_image_base64;
+            renderResultImage(); 
+        }
+        
+        function toggleFilter(type) {
+            if (type === 'escape') filterEscape = !filterEscape;
+            if (type === 'overkill') filterOverkill = !filterOverkill;
+            updateFilterUI();
+            renderHistory();
+        }
+        
+        function updateFilterUI() {
+            const esBox = document.getElementById('statEscapeBox');
+            const ovBox = document.getElementById('statOverkillBox');
+            const statusText = document.getElementById('filterStatus');
+            
+            esBox.classList.toggle('ring-2', filterEscape);
+            esBox.classList.toggle('ring-yellow-400', filterEscape);
+            
+            ovBox.classList.toggle('ring-2', filterOverkill);
+            ovBox.classList.toggle('ring-orange-400', filterOverkill);
+
+            if(filterOverkill || filterEscape) {
+                statusText.classList.remove('hidden');
+                let texts = [];
+                if (filterEscape) texts.push("漏檢");
+                if (filterOverkill) texts.push("過殺");
+                statusText.innerText = `篩選條件套用中: ${texts.join(' 與 ')}`;
+            } else {
+                statusText.classList.add('hidden');
+            }
+        }
+        // 控制過殺與漏檢的篩選條件，更新 UI 狀態以反映當前的篩選條件，並重新渲染歷史紀錄列表以套用篩選效果
+        function toggleCategory(cat) {
+            collapsedState[cat] = !collapsedState[cat];
+            renderHistory(); 
+        }
+        function toggleFolder(cat, folder) {
+            const key = `${cat}_${folder}`;
+            if (collapsedFolderState[key] === undefined) {
+                collapsedFolderState[key] = true; 
+            } else {
+                collapsedFolderState[key] = !collapsedFolderState[key];
+            }
+            renderHistory();
+        }
+        // 控制類別與資料夾的展開與收合，更新對應的狀態變數，並重新渲染歷史紀錄列表以反映展開狀態
+        function jumpTo(cat, index) {
+            updateUI(globalHistory[cat][index]);
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('resultArea').classList.remove('hidden');
+            
+            if(cat !== currentCategory) {
+                document.getElementById('category').value = cat;
+            }
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('historyList');
+            list.innerHTML = "";
+
+            updateTopStats();
+            updateChart(); 
+
+            for (let cat in globalHistory) {
+                const logs = globalHistory[cat];
+                if (logs.length === 0) continue;
+
+                let catOverkill = 0;
+                let catEscape = 0;
+                let catTrueNormal = 0;
+                let catTrueDefect = 0;
+
+                logs.forEach(item => {
+                    const isTrueNormal = item.true_label.includes("正常") || item.true_label.includes("Good");
+                    const isPredNormal = item.pred_label.includes("正常") || item.pred_label.includes("OK");
+
+                    if (isTrueNormal) {
+                        catTrueNormal++;
+                        if (!isPredNormal) catOverkill++;
+                    } else {
+                        catTrueDefect++;
+                        if (isPredNormal) catEscape++;
+                    }
+                });
+
+                const overkillRate = catTrueNormal > 0 ? ((catOverkill / catTrueNormal) * 100).toFixed(1) : "0.0";
+                const escapeRate = catTrueDefect > 0 ? ((catEscape / catTrueDefect) * 100).toFixed(1) : "0.0";
+
+                const isCollapsed = collapsedState[cat];
+                
+                let catHtml = `
+                    <div class="mb-2">
+                        <button onclick="toggleCategory('${cat}')" class="w-full flex justify-between items-center px-3 py-2 bg-slate-200/60 hover:bg-slate-200 text-slate-600 rounded-md transition-colors shadow-sm">
+                            <div class="flex flex-col items-start gap-0.5">
+                                <span class="text-[10px] font-black uppercase tracking-widest">${cat} (${logs.length})</span>
+                                <div class="flex gap-2 text-[8px] font-bold">
+                                    <span class="${parseFloat(overkillRate) > 0 ? 'text-orange-600' : 'text-slate-400'}">過殺率: ${overkillRate}%</span>
+                                    <span class="${parseFloat(escapeRate) > 0 ? 'text-rose-600' : 'text-slate-400'}">漏檢率: ${escapeRate}%</span>
+                                </div>
+                            </div>
+                            <svg class="w-3 h-3 text-slate-400 transition-transform ${isCollapsed ? '' : 'rotate-180'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="accordion-content space-y-1 mt-1.5 ${isCollapsed ? 'collapsed' : 'expanded'}">
+                `;
+
+                let groupedLogs = {};
+                logs.forEach((item, index) => {
+                    const isTrueNormal = item.true_label.includes("正常") || item.true_label.includes("Good");
+                    const isPredNormal = item.pred_label.includes("正常") || item.pred_label.includes("OK");
+                    const isPredNg = !isPredNormal;
+                    const isOverkill = isTrueNormal && !isPredNormal;
+                    const isEscape = !isTrueNormal && isPredNormal;
+
+                    const isFiltering = filterOverkill || filterEscape;
+                    const matchOverkill = filterOverkill && isOverkill;
+                    const matchEscape = filterEscape && isEscape;
+                    
+                    if (isFiltering && !(matchOverkill || matchEscape)) return;
+
+                    const folder = item.file_path.split('/')[0].toUpperCase();
+                    if (!groupedLogs[folder]) groupedLogs[folder] = [];
+                    groupedLogs[folder].push({ item, index, isOverkill, isEscape, isPredNg });
+                });
+
+                let hasVisibleItems = false;
+
+                for (let folder in groupedLogs) {
+                    hasVisibleItems = true;
+                    
+                    const folderKey = `${cat}_${folder}`;
+                    if (collapsedFolderState[folderKey] === undefined) {
+                        collapsedFolderState[folderKey] = false; 
+                    }
+                    const isFolderCollapsed = collapsedFolderState[folderKey];
+
+                    catHtml += `
+                        <button onclick="toggleFolder('${cat}', '${folder}')" class="w-full flex justify-between items-center bg-slate-200/40 text-[9px] font-black text-slate-500 uppercase px-2 py-1.5 my-1.5 rounded-sm border-l-2 border-slate-300 tracking-widest hover:bg-slate-200/70 transition-colors">
+                            <span>${folder}</span>
+                            <svg class="w-2.5 h-2.5 text-slate-400 transition-transform ${isFolderCollapsed ? '' : 'rotate-180'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="space-y-1 overflow-hidden transition-all duration-300 ${isFolderCollapsed ? 'max-h-0 opacity-0' : 'max-h-[3000px] opacity-100'}">
+                    `;
+                    
+                    groupedLogs[folder].forEach(entry => {
+                        const { item, index, isOverkill, isEscape, isPredNg } = entry;
+                        const isViewingThis = currentViewData && currentViewData.file_path === item.file_path;
+                        const activeClass = isViewingThis ? "bg-white border-blue-500 shadow-sm scale-[1.01]" : "bg-white/40 border-transparent hover:bg-white cursor-pointer";
+                        const dotText = isPredNg ? "NG" : "OK";
+                        const dotColor = isPredNg ? "text-red-600 bg-red-100" : "text-emerald-600 bg-emerald-100";
+                        const logNumber = logs.length - index;
+
+                        let warningBadge = "";
+                        if (isOverkill) warningBadge = `<span class="text-[8px] font-bold bg-orange-100 text-orange-600 border border-orange-200 px-1 py-0.5 rounded ml-1 whitespace-nowrap shadow-sm">過殺</span>`;
+                        if (isEscape) warningBadge = `<span class="text-[8px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1 py-0.5 rounded ml-1 whitespace-nowrap shadow-sm">漏檢</span>`;
+
+                        catHtml += `
+                            <div onclick="jumpTo('${cat}', ${index})" class="log-item p-2.5 rounded border-l-4 transition-all ${activeClass} mb-1">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-[9px] font-black text-slate-400">#${logNumber.toString().padStart(3, '0')}</span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[9px] font-black px-1.5 rounded ${dotColor}">${dotText}</span>
+                                        ${warningBadge}
+                                    </div>
+                                </div>
+                                <div class="text-[11px] font-bold text-slate-700 truncate w-full" title="${item.image_name}">${item.image_name}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    catHtml += `</div>`; 
+                }
+
+                if (!hasVisibleItems) {
+                    catHtml += `<div class="text-[10px] text-slate-400 p-2 italic text-center">無符合條件</div>`;
+                }
+
+                catHtml += `</div></div>`; 
+                list.innerHTML += catHtml;
+            }
+            
+            if (Object.keys(globalHistory).every(cat => globalHistory[cat].length === 0)) {
+                list.innerHTML = '<div id="emptyLog" class="text-center text-slate-400 py-10 text-xs">圖庫已載入，等待抽檢...</div>';
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+        });
+    </script>
+</body>
+</html>

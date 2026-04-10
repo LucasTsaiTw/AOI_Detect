@@ -37,7 +37,9 @@ for category in CATEGORIES:
     )
 
     print(f" Training: {category}")
+    # 訓練模型
     engine.fit(datamodule=datamodule, model=model)
+    # 匯出權重
     engine.export(model=model, export_type=ExportType.TORCH, export_root=category_dir)
 
     # 權重檔重新命名為 [種類]_model.pt

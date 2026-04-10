@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<!-- 網頁樣式與字體設定 -->
+<head>
+    <meta charset="UTF-8">
+    <title>產品主管 管理中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap'); body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }</style>
+</head>
+
+<body class="text-slate-800">
+    <nav class="bg-slate-900 text-white p-4 shadow-lg flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <h1 class="font-bold text-lg tracking-wide">產品主管 管理中心</h1>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- 跳轉至前端產線介面的按鈕 -->
+            <button onclick="window.location.href='/?mode=view'" class="text-xs font-bold text-white p-4 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors shadow-sm border border-slate-700">
+                查看產品影像辨識情況
+            </button>
+            <!-- 觸發下方 JS 的 logout 函式 -->
+            <button onclick="logout()" class="text-sm font-bold text-slate-300 hover:text-rose-400 transition-colors">登出 (Logout)</button>
+        </div>
+    </nav>
+
+    <!-- 主要內容區域 -->
+    <main class="max-w-7xl mx-auto p-6 flex flex-col gap-6">
+        
+        <!-- 產品類別管理 (新增與列表) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-slate-200 bg-teal-50/50 flex justify-between items-center">
+                <h2 class="font-black text-slate-700"> 產品類別管理 (新增前端機台檢測類別)</h2>
+            </div>
+            <div class="p-5 flex gap-8">
+                <!-- 新增類別的表單。送出時會觸發下方 JS 的 handleAddCategory 函式 -->
+                <form id="createCategoryForm" onsubmit="handleAddCategory(event)" class="w-1/2 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">類別英文代碼 (Code)</label>
+                        <input type="text" id="catCode" placeholder="例如: screen" required class="w-full border rounded p-2 text-sm outline-none focus:border-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">類別畫面顯示名稱 (Display Name)</label>
+                        <input type="text" id="catName" placeholder="例如: Screen (手機螢幕)" required class="w-full border rounded p-2 text-sm outline-none focus:border-teal-500">
+                    </div>
+                    <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-6 rounded shadow active:scale-95">➕ 上架新產品類別</button>
+                    <!-- 顯示 API 回傳成功或失敗的訊息框 -->
+                    <div id="catMsgBox" class="hidden mt-3 text-sm font-bold p-2 rounded"></div>
+                </form>
+
+                <!-- 顯示目前已建立的產品類別清單 -->
+                <div class="w-1/2 border rounded bg-slate-50 overflow-y-auto max-h-">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-200 text-xs text-slate-600 sticky top-0">
+                            <tr><th class="p-2">類別英文代碼</th><th class="p-2">類別顯示名稱</th></tr>
+                        </thead>
+                        <!-- 資料會由 loadCategoriesManager 函式動態填入 -->
+                        <tbody id="categoryList">
+                            <!-- 動態載入 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 網頁下方影像辨識誤判報表與覆判操作 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                <h2 class="font-black text-slate-700">影像辨識模型-誤判報表覆判</h2>
+                <!-- 點擊重新向後端要求最新的報表資料 -->
+                <button onclick="loadReports()" class="bg-white border border-slate-300 text-slate-600 px-4 py-2 rounded shadow-sm text-xs font-bold hover:bg-slate-100 active:scale-95">↻ 重新整理報表</button>
+            </div>
+            
+            <!-- 報表資料表 -->
+            <div class="overflow-x-auto max-h- overflow-y-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-slate-100 shadow-sm z-10">
+                        <tr class="text-slate-500 text-xs uppercase tracking-wider">
+                            <th class="p-4 border-b">時間</th>
+                            <th class="p-4 border-b">圖片資訊</th>
+                            <th class="p-4 border-b">影像辨識模型判定分數</th>
+                            <th class="p-4 border-b text-center">目前狀態</th>
+                            <th class="p-4 border-b">主管判定操作</th>
+                            <th class="p-4 border-b text-center">動作</th>
+                        </tr>
+                    </thead>
+                    <!-- 資料會由 loadReports 函式動態填入 -->
+                    <tbody id="reportTableBody">
+                        <tr><td colspan="6" class="text-center p-8 text-slate-400 font-bold">載入中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- 圖片彈出視窗 ：預設隱藏，點擊「查看原圖」時才會顯示 -->
+    <div id="imageModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white p-4 rounded-xl shadow-2xl max-w-4xl w-full flex flex-col max-h-">
+            <div class="flex justify-between items-center mb-4 border-b pb-2 shrink-0">
+                <div>
+                    <h3 class="font-black text-lg text-slate-800" id="modalImageName">檢視影像</h3>
+                    <p class="text-xs text-slate-500" id="modalFilePath"></p>
+                </div>
+                <!-- 關閉彈窗的按鈕 -->
+                <button onclick="closeModal()" class="text-slate-400 hover:text-rose-500 transition-colors p-2 rounded-full hover:bg-slate-100">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-hidden flex justify-center items-center bg-slate-100 rounded-lg p-2 relative">
+                <!-- 載入中的提示動畫 -->
+                <div id="modalLoading" class="absolute inset-0 flex items-center justify-center text-blue-600 font-bold animate-pulse">
+                    載入影像中...
+                </div>
+                <img id="modalImg" src="" alt="Defect Image" class="max-w-full max-h-full object-contain hidden shadow-sm rounded border border-slate-200">
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // 網頁載入完成後立即執行的檢查
+        document.addEventListener('DOMContentLoaded', () => {
+            // 檢查 localStorage 中是否存有 JWT 憑證，若無則踢回首頁
+            if (!localStorage.getItem('access_token')) {
+                alert("請先登入！");
+                window.location.href = '/';
+                return;
+            }
+            // 若有登入，則自動載入報表與類別列表
+            loadReports();
+            loadCategoriesManager();
+        });
+
+        // 登出：清除 JWT 憑證與角色資訊，並跳轉回首頁
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('role');
+            window.location.href = '/'; 
+        }
+
+        // 「新增產品類別」的表單送出事件
+        async function handleAddCategory(event) {
+            // 阻止瀏覽器預設的表單送出（避免網頁重新整理）
+            event.preventDefault(); 
+
+            // 取得顯示訊息的 HTML 元素並設定為「處理中」狀態
+            const msgBox = document.getElementById('catMsgBox'); 
+            msgBox.className = "mt-3 text-sm font-bold p-2 rounded bg-teal-100 text-teal-700 block";
+            msgBox.innerText = "處理中...";
+
+            try {
+                // 使用 Fetch API 呼叫main.py裡的 /api/manager/categories 這個 API 來新增類別
+                const res = await fetch('/api/manager/categories', {
+                    method: 'POST', 
+                    // 將 JWT 憑證放在 Header 送給後端進行權限驗證
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    // 將表單輸入的值轉成 JSON 字串放入 Request Body
+                    body: JSON.stringify({
+                        category_code: document.getElementById('catCode').value,
+                        display_name: document.getElementById('catName').value
+                    })
+                });
+                
+                // 判斷後端回傳狀態，若不是 ok ，則回傳錯誤訊息
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || "無法建立類別");
+                }
+                
+                // 若成功，讀取回傳資料並顯示成功訊息 
+                const data = await res.json();
+                msgBox.className = "mt-3 text-sm font-bold p-2 rounded bg-emerald-100 text-emerald-700 block";
+                msgBox.innerText = data.message;
+                
+                // 重置表單輸入框，並呼叫函式重新載入最新的類別列表    
+                document.getElementById('createCategoryForm').reset();
+                loadCategoriesManager(); 
+
+            } catch (error) {
+                // 若發生錯誤，顯示錯誤訊息 (紅色)
+                msgBox.className = "mt-3 text-sm font-bold p-2 rounded bg-rose-100 text-rose-700 block";
+                msgBox.innerText = error.message;
+                // 若錯誤訊息包含「憑證」，代表 Token 失效，延遲後回到首頁
+                if(error.message.includes("憑證")) setTimeout(logout, 1500);
+            }
+        }
+
+        // 從後端讀取所有產品類別，並顯示在右側的表格中
+        async function loadCategoriesManager() {
+            const tbody = document.getElementById('categoryList');
+            try {
+                const res = await fetch('/api/categories', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+                });
+                
+                if (!res.ok) throw new Error("無法取得類別列表");
+                
+                const data = await res.json();
+                tbody.innerHTML = ''; // 清空原本的列表
+                // 將後端傳回的資料逐筆轉換成 HTML <tr> 標籤並放入表格
+                data.categories.forEach(cat => {
+                    tbody.innerHTML += `<tr class="border-b"><td class="p-2 font-mono text-xs text-slate-500">${cat.category_code}</td><td class="p-2 font-bold">${cat.display_name}</td></tr>`;
+                });
+            } catch (e) {
+                // 載入失敗時顯示提示
+                tbody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-rose-500 font-bold">載入失敗: ${e.message}</td></tr>`;
+            }
+        }
+
+        // 預先定義好的狀態樣式設定 (用於渲染表格的「目前狀態」欄位)
+        const statusConfig = {
+            'pending': { text: '待審核', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+            'confirmed': { text: '真瑕疵', color: 'bg-rose-100 text-rose-700 border-rose-200' },
+            'false_alarm': { text: '誤報 (過殺)', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+        };
+
+        // 從後端載入誤判報表資料，並呼叫 renderTable 函式來顯示在網頁上
+        async function loadReports() {
+            // 等待 API 回傳資料後再更新表格內容
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-slate-400 font-bold animate-pulse">撈取資料中...</td></tr>';
+            // 呼叫後端 API 來取得誤判報表資料，並且在 Header 裡帶上 JWT 憑證來驗證身份
+            try {
+                const res = await fetch('/api/manager/defect-reports', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "伺服器錯誤");
+                }
+
+                const data = await res.json();
+                // 如果沒有資料，顯示慶祝訊息
+                if (!data.reports || data.reports.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-slate-400 font-bold">🎉 目前沒有任何異常誤判報表！</td></tr>';
+                    return;
+                }
+                // 若有資料，呼叫 renderTable 函式來繪製表格
+                renderTable(data.reports);
+            } catch (error) { 
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-rose-500 font-bold">載入失敗: ${error.message}</td></tr>`; 
+                if(error.message.includes("憑證")) setTimeout(logout, 1500);
+            }
+        }
+
+        // 將取得的報表資料變成 HTML 格式放入網頁
+        function renderTable(reports) {
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '';
+            reports.forEach(report => {
+                // 取得對應狀態的樣式
+                const conf = statusConfig || statusConfig;
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
+                
+                const filePath = report.file_path || ''; 
+                // 將檔案路徑進行 URL 編碼，避免特殊字元造成傳輸錯誤
+                const safeFilePathCode = encodeURIComponent(filePath);
+                const scoreDisplay = Number(report.score || 0).toFixed(2);
+
+                // 組合每一列 (Row) 的 HTML 結構
+                tr.innerHTML = `
+                    <td class="p-4 text-xs text-slate-500 font-medium">${report.detect_time}</td>
+                    <td class="p-4">
+                        <div class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            ${report.image_name}
+                            <!-- 查看原圖按鈕，點擊後會呼叫 viewImage 函式並傳入檔名、路徑與產品類別 -->
+                            <button onclick="viewImage('${report.image_name}', decodeURIComponent('${safeFilePathCode}'), '${report.category}')" class="text- bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded shadow-sm transition-colors flex items-center gap-1">
+                                 查看原圖
+                            </button>
+                        </div>
+                        <div class="text- bg-slate-100 text-slate-500 inline-block px-1 py-0.5 rounded mt-1">${report.category}</div>
+                        <!-- 顯示系統原始判定結果 -->
+                        <div class="mt-2 text-xs"><span class="text-slate-400">影像辨識模型 判定：</span> <span class="font-bold text-rose-600">${report.pred_label}</span></div>
+                    </td>
+                    <td class="p-4 font-black text-rose-600">${scoreDisplay} %</td>
+                    <!-- 顯示目前的覆判狀態標籤 -->
+                    <td class="p-4 text-center"><span class="px-2 py-1 rounded text-xs font-bold border ${conf.color}">${conf.text}</span></td>
+                    <td class="p-4">
+                        <!-- 主管填寫覆判結果的區域 -->
+                        <div class="flex flex-col gap-2">
+                            <select id="status_${report.record_id}" class="bg-white border rounded p-1.5 text-xs font-bold outline-none w-32">
+                                <option value="pending" ${report.review_status === 'pending' ? 'selected' : ''}>請選擇...</option>
+                                <option value="confirmed" ${report.review_status === 'confirmed' ? 'selected' : ''}> 真瑕疵</option>
+                                <option value="false_alarm" ${report.review_status === 'false_alarm' ? 'selected' : ''}> 誤報 (可放行)</option>
+                            </select>
+                            <input type="text" id="comment_${report.record_id}" placeholder="主管備註..." value="${report.comments || ''}" class="bg-white border rounded p-1.5 text-xs outline-none w-48">
+                        </div>
+                    </td>
+                    <td class="p-4 text-center">
+                        <!-- 送出該筆覆判紀錄的按鈕 -->
+                        <button onclick="submitReview(${report.record_id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-xs shadow active:scale-95">儲存判定</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 將主管的覆判結果上傳至資料庫
+        async function submitReview(recordId) {
+            // 抓取網頁上該列的下拉選單與備註框的值
+            const statusVal = document.getElementById(`status_${recordId}`).value;
+            const commentVal = document.getElementById(`comment_${recordId}`).value;
+            
+            // 若未選擇判定結果則擋下
+            if (statusVal === 'pending') return alert("請選擇判定結果！");
+            
+            try {
+                // 發送 POST 請求更新資料庫狀態
+                const res = await fetch('/api/manager/review', {
+                    method: 'POST',
+                    // 帶上 JWT 憑證來驗證身份，將覆判結果與備註以 JSON 格式放在 Request Body 中送給後端
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    body: JSON.stringify({ record_id: recordId, review_status: statusVal, comments: commentVal })
+                });
+                
+                if (!res.ok) throw new Error("儲存失敗");
+                // 儲存成功後，重新向後端要一次最新的資料來更新畫面
+                loadReports();
+            } catch (error) { alert("錯誤：" + error.message); }
+        }
+
+        // 開啟彈出視窗並向後端請求原始圖片
+        async function viewImage(imageName, filePath, category) {
+            if (!filePath || filePath === 'undefined') {
+                alert("此紀錄缺乏影像路徑，無法顯示圖片。");
+                return;
+            }
+
+            // 取得 HTML 中的彈窗元素
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImg');
+            const modalLoading = document.getElementById('modalLoading');
+            
+            // 設定標題資訊
+            document.getElementById('modalImageName').innerText = imageName;
+            document.getElementById('modalFilePath').innerText = filePath;
+            
+            // 初始化視窗狀態：隱藏圖片，顯示載入中動畫
+            modalImg.classList.add('hidden');
+            modalImg.src = "";
+            modalLoading.classList.remove('hidden');
+            
+            // 顯示背景遮罩
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.remove('opacity-0'), 10); 
+
+            try {
+                // 組裝 API 網址，透過 query 參數傳遞路徑與類別給後端
+                const apiUrl = `/api/manager/image?file_path=${encodeURIComponent(filePath)}&category=${encodeURIComponent(category)}`;
+                
+                const response = await fetch(apiUrl, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "圖片載入失敗");
+                }
+
+                // 將後端傳回的二進位檔案轉為 Blob 物件
+                const blob = await response.blob();
+                // 產生一個可以讓瀏覽器顯示的暫存 URL 給 <img> 標籤
+                modalImg.src = URL.createObjectURL(blob);
+                
+                // 圖片完全下載後，隱藏載入動畫並顯示圖片
+                modalImg.onload = () => {
+                    modalLoading.classList.add('hidden');
+                    modalImg.classList.remove('hidden');
+                };
+            } catch (error) {
+                // 處理讀取失敗的狀況
+                modalLoading.innerText = "⚠️ " + error.message;
+                modalLoading.className = "absolute inset-0 flex items-center justify-center text-rose-600 font-bold";
+            }
+        }
+
+        // 關閉圖片彈出視窗
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.add('opacity-0'); // 開始淡出動畫
+            
+            // 延遲 300 毫秒等待動畫結束後，真正隱藏元素並清理記憶體
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                const img = document.getElementById('modalImg');
+                // 釋放剛才建立的 Blob 暫存 URL，避免記憶體洩漏 (Memory Leak)
+                if(img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+            }, 300); 
+        }
+    </script>
+</body>
+</html>
