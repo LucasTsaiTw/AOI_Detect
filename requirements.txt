@@ -9,3 +9,4 @@ python-jose[cryptography]
 
 sqlalchemy
 aiosqlite
+PyJWT

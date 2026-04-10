@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<!-- 網頁樣式設定 -->
+<head>
+    <meta charset="UTF-8">
+    <title>IT 管理後台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap'); body { font-family: 'Inter', sans-serif; }</style>
+</head>
+
+<body class="bg-slate-50 text-slate-800">
+    <nav class="bg-slate-900 text-white p-4 shadow-lg flex justify-between items-center">
+        <h1 class="font-black tracking-widest">IT 管理後台</h1>
+        <!-- 觸發下方 JS 的 logout 函式。 -->
+        <button onclick="logout()" class="text-sm font-bold text-slate-300 hover:text-white transition-colors">登出 (Logout)</button>
+    </nav>
+
+    <!-- 主要內容區域，放置帳號管理的表單和訊息顯示框。 -->
+    <main class="max-w-3xl mx-auto p-6 mt-6">
+        <!-- 畫出一個帶有圓角和陰影的白色卡片，用來裝填表單。 -->
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-6">
+            <h2 class="font-black text-lg border-b pb-2 mb-4 text-slate-700"> 系統帳號管理</h2>
+            <!-- 這裡的表單會觸發下方 JS 的 handleCreateUser 函式，負責呼叫後端 API 來新增帳號。 -->
+            <form id="createUserForm" onsubmit="handleCreateUser(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">帳號名稱</label>
+                    <input type="text" id="newUsername" required class="w-full border rounded p-2 text-sm outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">初始密碼 </label>
+                    <input type="password" id="newPassword" required class="w-full border rounded p-2 text-sm outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">員工職位設定</label>
+                    <select id="newRole" class="w-full border rounded p-2 text-sm outline-none focus:border-indigo-500">
+                        <option value="operator"> 產品操作員</option>
+                        <option value="manager"> 品管主管</option>
+                        <option value="admin"> IT 管理員</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow active:scale-95">➕ 新增帳號</button>
+            </form>
+            <div id="msgBox" class="hidden mt-3 text-sm font-bold p-2 rounded"></div>
+        </div>
+    </main>
+
+    <!-- 下方 JS 負責處理登出和新增帳號的功能。  -->
+    <script>
+        function logout() {
+        localStorage.removeItem('access_token'); // 登出時清除 JWT 憑證
+            localStorage.removeItem('role'); // 清除使用者角色資訊
+            window.location.href = '/'; // 登出後跳轉回首頁
+        }
+
+        async function handleCreateUser(event) {
+            // 阻止瀏覽器預設的表單送出（預設會讓整個網頁重新整理）
+            event.preventDefault();            
+            const msgBox = document.getElementById('msgBox');
+            msgBox.className = "mt-3 text-sm font-bold p-2 rounded bg-indigo-100 text-indigo-700 block";
+            msgBox.innerText = "處理中...";
+
+            // 使用 Fetch API 呼叫 main.py 裡的 /api/admin/users 這個 API 來新增帳號
+            try {
+                const res = await fetch('/api/admin/users', {
+                    // 使用 POST 方法，並且在 Header 裡帶上 JWT 憑證傳給後端來驗證身份
+                    method: 'POST', 
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    // 從表單裡取得使用者輸入的帳號名稱、密碼和角色，並且轉成 JSON 格式放在 Request Body 裡
+                    body: JSON.stringify({
+                        username: document.getElementById('newUsername').value,
+                        password: document.getElementById('newPassword').value,
+                        role: document.getElementById('newRole').value
+                    })
+                });
+                const data = await res.json();
+                // 如果後端回傳成功，顯示成功訊息並且清空表單；如果失敗，丟出錯誤讓 catch 區塊處理
+                if (res.ok) {
+                    msgBox.className = "mt-3 text-sm font-bold p-2 rounded bg-emerald-100 text-emerald-700 block";
+                    msgBox.innerText = data.message;
+                    document.getElementById('createUserForm').reset();
+                } else { 
+                    throw new Error(data.detail); 
+                }
+            } 
+            // 如果呼叫 API 的過程中有任何錯誤，都會進入這個 catch 區塊來顯示錯誤訊息給使用者。
+            catch (error) {
+                msgBox.className = "mt-3 text-sm font-bold p-2 rounded bg-rose-100 text-rose-700 block";
+                msgBox.innerText = error.message;
+                // 如果是憑證過期或沒權限，自動回到首頁
+                if(error.message.includes("憑證") || error.message.includes("權限")) {
+                    setTimeout(logout, 1500);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

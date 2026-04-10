@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
+<!-- 前端主頁面 -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,15 +19,17 @@
         .accordion-content.expanded { max-height: 3000px; opacity: 1; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 h-screen overflow-hidden flex font-sans text-sm relative">
 
+<!-- 左側為統計分析與歷史紀錄的側邊欄，右側為推論結果展示區 -->
+<body class="bg-slate-50 text-slate-800 h-screen overflow-hidden flex font-sans text-sm relative">
+    <!-- 登入畫面，預設為隱藏，未認證狀態下顯示 -->
     <div id="loginView" class="fixed inset-0 bg-slate-100 z-[100] flex items-center justify-center">
         <div class="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
             <div class="text-center mb-8">
                 <div class="font-black text-3xl tracking-tighter mb-2">Vision<span class="text-blue-600">AOI</span></div>
                 <p class="text-xs font-bold text-slate-400 tracking-widest uppercase">智慧品管監控系統</p>
             </div>
-            
+            <!-- 登入表單，包含帳號、密碼欄位，以及錯誤訊息顯示區域 -->
             <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-5">
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">帳號 (Username)</label>
@@ -44,58 +48,7 @@
             </form>
         </div>
     </div>
-
-    <div id="accountManagerView" class="hidden fixed inset-0 bg-slate-900/40 z-[90] flex items-center justify-center backdrop-blur-sm transition-opacity">
-        <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden border border-slate-200">
-            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <div>
-                    <h2 class="font-black text-lg text-slate-800">系統帳號管理</h2>
-                    <p class="text-[10px] font-bold text-slate-400 mt-0.5">新增、刪除或修改操作員權限</p>
-                </div>
-                <button onclick="toggleAccountManager()" class="text-slate-400 hover:text-slate-600 transition-colors p-1">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <div class="p-5 overflow-y-auto flex-1 bg-slate-50/50">
-                <div class="bg-white p-4 rounded-xl border border-slate-200 mb-6 flex gap-3 items-end shadow-sm">
-                    <div class="flex-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">新帳號名稱</label>
-                        <input type="text" id="newUsername" class="w-full bg-slate-50 border border-slate-200 rounded px-3 py-2 text-xs font-bold focus:border-blue-500 outline-none">
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">預設密碼</label>
-                        <input type="password" id="newPassword" class="w-full bg-slate-50 border border-slate-200 rounded px-3 py-2 text-xs font-bold focus:border-blue-500 outline-none">
-                    </div>
-                    <div class="w-32">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">權限角色</label>
-                        <select id="newRole" class="w-full bg-slate-50 border border-slate-200 rounded px-3 py-2 text-xs font-bold focus:border-blue-500 outline-none cursor-pointer">
-                            <option value="operator">操作員</option>
-                            <option value="admin">管理員</option>
-                        </select>
-                    </div>
-                    <button onclick="addAccount()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 rounded text-xs transition-colors h-[34px]">
-                        新增
-                    </button>
-                </div>
-
-                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                    <table class="w-full text-left text-xs">
-                        <thead class="bg-slate-100 text-[10px] uppercase tracking-wider text-slate-500">
-                            <tr>
-                                <th class="px-4 py-3 font-black">帳號</th>
-                                <th class="px-4 py-3 font-black">角色</th>
-                                <th class="px-4 py-3 font-black text-right">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="accountListBody" class="divide-y divide-slate-100 font-bold text-slate-600">
-                            </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    <!-- 側邊欄包含統計分析、歷史紀錄列表，以及匯出報表的按鈕 -->
     <aside id="sidebar" class="w-80 shrink-0 transition-all duration-300 ease-in-out overflow-hidden bg-white border-r border-slate-200 flex flex-col shadow-sm z-30">
         <div class="w-80 flex flex-col h-full">
             <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-col gap-3 shrink-0">
@@ -103,7 +56,7 @@
                     <span class="font-black text-slate-500 text-[10px] uppercase tracking-widest">展開類別統計分析</span>
                     <span id="totalLogCount" class="bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full">0 筆</span>
                 </div>
-                
+                <!-- 過殺與漏檢的統計數字，點擊後可套用篩選條件，並在下方顯示篩選狀態 -->
                 <div class="flex gap-2 text-[10px] font-bold">
                     <div id="statEscapeBox" onclick="toggleFilter('escape')" class="cursor-pointer flex-1 bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded border border-yellow-200 flex justify-between items-center shadow-sm transition-all hover:bg-yellow-100" title="點擊過濾：漏檢">
                         <span>漏檢</span>
@@ -116,7 +69,7 @@
                 </div>
                 <div id="filterStatus" class="hidden text-[9px] font-bold text-blue-500 text-center bg-blue-50 py-1 rounded">篩選條件套用中 (點擊上方取消)</div>
             </div>
-
+            <!-- 系統判定信心分佈的圖表區域，包含標題與匯出按鈕 -->
             <div class="p-4 border-b border-slate-100 bg-white shrink-0">
                 <div class="flex justify-between items-center mb-2">
                     <span class="font-black text-slate-500 text-[10px] uppercase tracking-widest">系統判定信心分佈</span>
@@ -128,7 +81,7 @@
                     <canvas id="trendChart"></canvas>
                 </div>
             </div>
-            
+            <!-- 歷史紀錄列表區域，預設顯示等待訊息，抽樣後會動態更新為檢測紀錄 -->
             <div id="historyList" class="flex-1 overflow-y-auto p-3 bg-slate-50/50">
                 <div id="emptyLog" class="text-center text-slate-400 py-10 text-xs">等待機台啟動抽檢程序...</div>
             </div>
@@ -141,7 +94,7 @@
             </div>
         </div>
     </aside>
-
+    <!-- 主內容區域包含頁面標題、推論結果展示區，以及控制按鈕 -->
     <main class="flex-1 flex flex-col relative min-w-0">
         <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-20 shadow-sm shrink-0">
             <div class="flex items-center gap-4">
@@ -150,47 +103,33 @@
                 </button>
                 <div class="font-black text-xl tracking-tighter">Vision<span class="text-blue-600">AOI</span></div>
             </div>
-            
+            <!-- 類別選擇下拉選單，以及返回主管中心與登出按鈕 -->
             <div class="flex items-center gap-6">
                 <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-inner">
                     <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <span id="inferenceTime" class="text-slate-600 font-mono text-xs font-black tracking-widest">-- ms / img</span>
                 </div>
 
                 <div class="h-6 w-px bg-slate-200"></div>
-
-                <select id="category" onchange="initDataset()" class="bg-white border border-slate-200 text-slate-700 rounded px-2 py-1 outline-none font-bold text-xs cursor-pointer focus:border-blue-500 transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed">
-                    <option value="bottle">Bottle (瓶子)</option>
-                    <option value="cable">Cable (電纜)</option>
-                    <option value="capsule">Capsule (膠囊)</option>
-                    <option value="carpet">Carpet (地毯)</option>
-                    <option value="grid">Grid (網格)</option>
-                    <option value="hazelnut">Hazelnut (榛果)</option>
-                    <option value="leather">Leather (皮革)</option>
-                    <option value="metal_nut">Metal Nut (金屬螺帽)</option>
-                    <option value="pill">Pill (藥丸)</option>
-                    <option value="screw">Screw (螺絲)</option>
-                    <option value="tile">Tile (磁磚)</option>
-                    <option value="toothbrush">Toothbrush (牙刷)</option>
-                    <option value="transistor">Transistor (電晶體)</option>
-                    <option value="wood">Wood (木材)</option>
-                    <option value="zipper">Zipper (拉鍊)</option>
+                
+                <select id="category" onchange="initDataset()" class="bg-white border border-slate-200 text-slate-700 rounded px-2 py-1 outline-none font-bold text-xs cursor-pointer focus:border-blue-500 transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed w-48">
+                    <option value="">  載入類別中...</option>
                 </select>
 
                 <div class="h-6 w-px bg-slate-200"></div>
 
                 <div class="flex items-center gap-2">
-                    <button id="adminBtn" onclick="toggleAccountManager()" class="hidden text-slate-500 hover:text-blue-600 font-bold text-xs flex items-center gap-1 bg-slate-100 hover:bg-blue-50 px-2 py-1.5 rounded transition-colors">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                        帳號管理
+                    <button id="backToManagerBtn" onclick="window.location.href='/static/manager.html'" class="hidden text-blue-600 font-bold text-xs flex items-center gap-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-1.5 rounded transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        <span class="px-1">返回主管中心</span>
                     </button>
                     <button onclick="handleLogout()" class="text-slate-500 hover:text-rose-600 font-bold text-xs flex items-center gap-1 bg-slate-100 hover:bg-rose-50 px-2 py-1.5 rounded transition-colors" title="登出">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        <span class="px-1">登出</span>
                     </button>
                 </div>
             </div>
         </header>
-
+        
         <div class="flex-1 p-6 relative flex flex-col overflow-y-auto">
             <div id="loading" class="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center hidden">
                 <div class="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mb-2"></div>
@@ -206,7 +145,7 @@
                     自動連續執行
                 </button>
             </div>
-
+            <!-- 推論結果展示區，包含影像檔名、真實解答、異常分數、最終判定，以及原始影像與定位熱力圖的展示 -->
             <div id="resultArea" class="hidden flex-1 flex flex-col min-h-[500px]">
                 <div class="grid grid-cols-4 gap-4 mb-6 shrink-0">
                     <div class="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden">
@@ -267,26 +206,66 @@
         // ==================== 認證與授權邏輯 ====================
         
         function getAuthHeader() {
-            return { 'Authorization': `Bearer ${localStorage.getItem('aoi_token')}` };
+            return { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` };
         }
 
         function checkAuth() {
-            const token = localStorage.getItem('aoi_token');
-            const role = localStorage.getItem('aoi_role');
+            const token = localStorage.getItem('access_token');
+            const role = localStorage.getItem('role');
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const mode = urlParams.get('mode');
             
             if (token) {
-                document.getElementById('loginView').classList.add('hidden');
                 if (role === 'admin') {
-                    document.getElementById('adminBtn').classList.remove('hidden');
+                    window.location.href = '/static/admin.html';
+                    return;
+                } else if (role === 'manager' && mode !== 'view') {
+                    window.location.href = '/static/manager.html';
+                    return;
                 }
-                // 登入成功後才初始化
+                
+                document.getElementById('loginView').classList.add('hidden');
+                
+                if (role === 'manager') {
+                    document.getElementById('backToManagerBtn').classList.remove('hidden');
+                }
+                
                 initChart();
-                initDataset();
+                loadCategories(); 
             } else {
                 document.getElementById('loginView').classList.remove('hidden');
             }
         }
+        // 檢查使用者認證狀態，根據角色導向不同頁面，並初始化圖表與載入類別 
+        async function loadCategories() {
+            try {
+                const res = await fetch('/api/categories', { headers: getAuthHeader() });
+                // 如果 Token 失效，強制登出
+                if (res.status === 401) {
+                    handleLogout();
+                    return;
+                }
+                if (!res.ok) throw new Error("無法載入類別");
+                const data = await res.json();
+                
+                const select = document.getElementById('category');
+                select.innerHTML = ''; 
+                
+                data.categories.forEach(cat => {
+                    select.innerHTML += `<option value="${cat.category_code}">${cat.display_name}</option>`;
+                });
 
+                if(data.categories.length > 0) {
+                    initDataset();
+                } else {
+                    select.innerHTML = '<option value="">(無資料，請至後台新增)</option>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        // 從後端 API 載入類別列表，更新下拉選單，並處理認證失效的情況
         async function handleLogin(event) {
             event.preventDefault();
             const user = document.getElementById('username').value;
@@ -294,7 +273,6 @@
             const errObj = document.getElementById('loginError');
             
             try {
-                // 打 FastAPI 的 OAuth2 Token 端點
                 const res = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -304,10 +282,17 @@
                 if (!res.ok) throw new Error("登入失敗");
                 
                 const data = await res.json();
-                localStorage.setItem('aoi_token', data.access_token);
-                localStorage.setItem('aoi_role', data.role);
+                
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('role', data.role);
+                
                 errObj.classList.add('hidden');
-                checkAuth();
+                
+                if (data.role === 'manager') {
+                    window.location.href = '/static/manager.html';
+                } else {
+                    checkAuth();
+                }
             } catch (e) {
                 errObj.innerText = "帳號或密碼錯誤";
                 errObj.classList.remove('hidden');
@@ -315,106 +300,12 @@
         }
 
         function handleLogout() {
-            localStorage.removeItem('aoi_token');
-            localStorage.removeItem('aoi_role');
-            location.reload(); 
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('role');
+            window.location.href = '/'; 
         }
 
-        function toggleAccountManager() {
-            const modal = document.getElementById('accountManagerView');
-            if (modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden');
-                fetchAccountList();
-            } else {
-                modal.classList.add('hidden');
-            }
-        }
-
-        async function fetchAccountList() {
-            const tbody = document.getElementById('accountListBody');
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-slate-400">載入中...</td></tr>';
-            
-            try {
-                const res = await fetch('/api/auth/users', { headers: getAuthHeader() });
-                if (!res.ok) throw new Error("權限不足");
-                const accounts = await res.json();
-                renderAccountList(accounts);
-            } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-rose-500">無法獲取帳號列表</td></tr>';
-            }
-        }
-
-        function renderAccountList(accounts) {
-            const tbody = document.getElementById('accountListBody');
-            tbody.innerHTML = '';
-            
-            accounts.forEach(acc => {
-                const roleBadge = acc.role === 'admin' 
-                    ? `<span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[9px]">管理員</span>`
-                    : `<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[9px]">操作員</span>`;
-                    
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-50 transition-colors">
-                        <td class="px-4 py-3">${acc.username}</td>
-                        <td class="px-4 py-3">${roleBadge}</td>
-                        <td class="px-4 py-3 text-right">
-                            <button onclick="deleteAccount(${acc.id}, '${acc.username}')" class="text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors text-xs" ${acc.username === 'admin' ? 'disabled class="opacity-30 cursor-not-allowed"' : ''}>
-                                刪除
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        async function addAccount() {
-            const user = document.getElementById('newUsername').value;
-            const pass = document.getElementById('newPassword').value;
-            const role = document.getElementById('newRole').value;
-            
-            if (!user || !pass) return alert("請輸入帳號與密碼");
-            
-            try {
-                const res = await fetch('/api/auth/users', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        ...getAuthHeader()
-                    },
-                    body: JSON.stringify({ username: user, password: pass, role: role })
-                });
-                
-                if (!res.ok) {
-                    const errorData = await res.json();
-                    throw new Error(errorData.detail || "新增失敗");
-                }
-                
-                document.getElementById('newUsername').value = '';
-                document.getElementById('newPassword').value = '';
-                fetchAccountList();
-            } catch (e) {
-                alert(e.message);
-            }
-        }
-
-        async function deleteAccount(id, username) {
-            if (!confirm(`確定要刪除帳號 ${username} 嗎？`)) return;
-            
-            try {
-                const res = await fetch(`/api/auth/users/${id}`, {
-                    method: 'DELETE',
-                    headers: getAuthHeader()
-                });
-                
-                if (!res.ok) throw new Error("刪除失敗");
-                fetchAccountList();
-            } catch (e) {
-                alert(e.message);
-            }
-        }
-
-
-        // ==================== AOI 推論與 UI 邏輯 ====================
+        // ==================== AOI 推論 ====================
 
         let globalHistory = {};     
         let collapsedState = {};    
@@ -449,7 +340,7 @@
                 ctx.restore();
             }
         };
-
+        // Chart.js 插件：在柱狀圖上方顯示數值標籤，當數值大於 0 時才顯示標籤
         const customCanvasBackgroundColor = {
             id: 'customCanvasBackgroundColor',
             beforeDraw: (chart, args, options) => {
@@ -574,7 +465,7 @@
             document.getElementById('nextBtn').className = "group bg-slate-200 text-slate-500 px-8 py-3 rounded-xl font-black text-sm shadow-sm transition-all flex items-center gap-2 cursor-not-allowed";
             document.getElementById('nextBtn').disabled = true;
         }
-
+        // 控制側邊欄的展開與收合，以及推論結果的展示與圖表更新
         function updateTopStats() {
             let activeRecords = 0;
             let activeOverkill = 0;
@@ -596,7 +487,7 @@
             document.getElementById('statOverkill').innerText = activeOverkill;
             document.getElementById('statEscape').innerText = activeEscape;
         }
-
+        // 更新統計數字，根據目前展開的類別計算過殺與漏檢的數量，並更新圖表數據
         function toggleHeatmap() {
             showHeatmap = !showHeatmap;
             const btn = document.getElementById('heatmapToggle');
@@ -609,7 +500,7 @@
             }
             renderResultImage();
         }
-
+        // 切換熱力圖與原始影像的顯示，並更新按鈕樣式以反映當前狀態
         function renderResultImage() {
             if (!currentViewData) return;
             const imgEl = document.getElementById('resImage');
@@ -624,7 +515,7 @@
                 imgEl.style.opacity = 1;
             }, 100);
         }
-
+        // 匯出 CSV 報表
         function exportCSV() {
             if (!currentCategory || !globalHistory[currentCategory] || globalHistory[currentCategory].length === 0) {
                 return alert("目前沒有可匯出的檢測資料！請先執行抽樣。");
@@ -663,11 +554,13 @@
             link.click();
             document.body.removeChild(link);
         }
-
+        // 根據目前類別的檢測紀錄生成 CSV 格式的報表，並觸發下載，檔名包含類別名稱與日期
         async function initDataset() {
             if (isAutoRunning) return alert("請先停止自動執行");
             
             const categorySelect = document.getElementById('category');
+            if(!categorySelect.value) return; // 防呆
+            
             const newCategory = categorySelect.value;
             categorySelect.disabled = true; 
             
@@ -676,7 +569,6 @@
             document.getElementById('loading').classList.remove('hidden');
             
             try {
-                // 🔐 加上 Auth 標頭
                 const res = await fetch(`/api/inference/${newCategory}/images`, {
                     headers: getAuthHeader()
                 });
@@ -716,7 +608,7 @@
                 categorySelect.disabled = false; 
             }
         }
-
+        // 初始化資料集：根據選擇的類別從後端載入待檢測影像列表，更新 UI 狀態，並處理認證失效的情況
         async function toggleAutoRun() {
             const autoBtn = document.getElementById('autoRunBtn');
             const categorySelect = document.getElementById('category');
@@ -756,7 +648,7 @@
                 setButtonsDefault();
             }
         }
-
+        // 控制自動連續執行的開始與停止，根據狀態更新按鈕樣式與功能，並在自動執行過程中逐一抽取影像進行推論
         function drawNext() {
             if (imagePool.length === 0) {
                 setButtonsEmpty();
@@ -769,13 +661,12 @@
                 setButtonsEmpty();
             }
         }
-
+        // 單次抽樣執行：從圖庫中抽取一張影像，呼叫後端 API 進行推論，更新 UI 顯示結果，並處理可能的錯誤與認證失效
         async function executeInference(path) {
             document.getElementById('emptyState').classList.add('hidden');
             document.getElementById('loading').classList.remove('hidden');
             
             try {
-                // 🔐 加上 Auth 標頭
                 const res = await fetch(`/api/inference/${currentCategory}/infer?file_path=${encodeURIComponent(path)}`, {
                     headers: getAuthHeader()
                 });
@@ -804,7 +695,7 @@
                 document.getElementById('category').disabled = false;
             }
         }
-
+        // 呼叫後端 API 進行影像推論，根據回傳結果更新全局歷史紀錄，並刷新 UI 顯示最新的推論結果與統計資訊
         function updateUI(data) {
             currentViewData = data; 
             
@@ -846,14 +737,14 @@
             document.getElementById('origImage').src = "data:image/jpeg;base64," + data.original_image_base64;
             renderResultImage(); 
         }
-
+        
         function toggleFilter(type) {
             if (type === 'escape') filterEscape = !filterEscape;
             if (type === 'overkill') filterOverkill = !filterOverkill;
             updateFilterUI();
             renderHistory();
         }
-
+        
         function updateFilterUI() {
             const esBox = document.getElementById('statEscapeBox');
             const ovBox = document.getElementById('statOverkillBox');
@@ -875,12 +766,11 @@
                 statusText.classList.add('hidden');
             }
         }
-
+        // 控制過殺與漏檢的篩選條件，更新 UI 狀態以反映當前的篩選條件，並重新渲染歷史紀錄列表以套用篩選效果
         function toggleCategory(cat) {
             collapsedState[cat] = !collapsedState[cat];
             renderHistory(); 
         }
-
         function toggleFolder(cat, folder) {
             const key = `${cat}_${folder}`;
             if (collapsedFolderState[key] === undefined) {
@@ -890,7 +780,7 @@
             }
             renderHistory();
         }
-
+        // 控制類別與資料夾的展開與收合，更新對應的狀態變數，並重新渲染歷史紀錄列表以反映展開狀態
         function jumpTo(cat, index) {
             updateUI(globalHistory[cat][index]);
             document.getElementById('emptyState').classList.add('hidden');
@@ -1031,7 +921,6 @@
             }
         }
         
-        // 🚀 修改：載入時只做權限檢查，如果已登入 checkAuth 才會觸發後續初始化
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
         });

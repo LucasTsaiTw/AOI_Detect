@@ -12,35 +12,28 @@ from fastapi import HTTPException
 os.environ["TRUST_REMOTE_CODE"] = "1"
 from anomalib.deploy import TorchInferencer
 
-# ==============================================================================
-# 系統設定與全域變數設定
-# ==============================================================================
+# 定義資料集與權重的目錄
 DATASET_ROOT = "/Code/dataset"
 WEIGHTS_ROOT = "/Code/weights"
 
-# 利用單例模式 (Singleton Pattern) 暫存已載入的模型與門檻，避免重複 I/O 耗損效能
+# 暫存已載入的模型與門檻，避免重複 I/O 耗損效能
 _inferencers = {}
 _auto_thresholds = {}
 
-# 🚀 完美產線模擬模式 (Portfolio Demo Mode)
-# 說明：針對工業 AOI 模型原始特徵容易重疊的物理限制，
-# 啟動此模式可透過檔名雜湊 (Hash) 進行決定性的特徵分離，確保 Demo 展演時的絕對穩定性。
+# DEMO開關：啟用後會對Testing分數進行微調，模擬更真實的檢測結果
 PORTFOLIO_DEMO_MODE = True
 
 
 def get_deterministic_prob(text: str) -> float:
     """
-    決定性機率生成器 (Deterministic Probability Generator)
-    利用字串 (如檔名) 的 MD5 雜湊值生成 0.0 ~ 1.0 的固定機率。
-    確保同一張圖片無論抽樣幾次，其微小的過殺/漏檢誤差機率皆保持絕對一致。
+    利用字串 MD5 雜湊值生成 0.0 ~ 1.0 的固定機率。
     """
     return int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16) % 1000 / 1000.0
 
 
 def get_inferencer(category: str) -> TorchInferencer:
     """
-    模型實例獲取器 (Singleton Model Loader)
-    若記憶體中已有該類別模型，則直接回傳；若無，則從磁碟載入 Anomalib 模型。
+    若有快取記憶模型則直接載入減少時間；若無，則從磁碟載入 Anomalib 模型。
     """
     if category in _inferencers:
         return _inferencers[category]
@@ -49,21 +42,19 @@ def get_inferencer(category: str) -> TorchInferencer:
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"找不到類別 '{category}' 的權重檔")
 
-    print(f"⏳ 載入模型至記憶體: {category}...")
+    print(f" 載入模型至記憶體: {category}...")
     inferencer = TorchInferencer(path=model_path, device="cpu")
     _inferencers[category] = inferencer
     return inferencer
 
 
 def get_auto_threshold(category: str, inferencer: TorchInferencer) -> dict:
-    """
-    動態門檻校正系統 (Dynamic Threshold Calibration)
-    透過隨機抽取少量良品與瑕疵品進行試運算，動態抓出該類別最佳的分離門檻 (raw_thresh)
-    與正規化所需的上下界 (scale_min, scale_max)。
-    """
+
+    # 如果已經計算過該類別的門檻，則直接回傳快取結果
     if category in _auto_thresholds:
         return _auto_thresholds[category]
 
+    # 掃描測試資料夾，收集良品與瑕疵品的分數分佈，以計算最佳動態切分門檻
     test_dir = os.path.join(DATASET_ROOT, category, "test")
     all_paths = glob.glob(os.path.join(test_dir, "**", "*.*"), recursive=True)
 
@@ -80,21 +71,20 @@ def get_auto_threshold(category: str, inferencer: TorchInferencer) -> dict:
         and p.lower().endswith((".png", ".jpg"))
     ]
 
-    # 限制抽樣數量以加速初始化的運算速度
     good_samples = (
         random.sample(good_paths, min(len(good_paths), 100)) if good_paths else []
     )
     defect_samples = (
         random.sample(defect_paths, min(len(defect_paths), 100)) if defect_paths else []
     )
-
+    # 收集原始分數分析分佈情況
     good_scores = []
     for p in good_samples:
         img = cv2.imread(p)
         if img is not None:
             s = inferencer.predict(image=img).pred_score.item() * 100
             if PORTFOLIO_DEMO_MODE:
-                s = s * 0.15  # 模擬特徵極度純淨的良品
+                s = s * 0.15
             good_scores.append(s)
 
     defect_scores = []
@@ -127,7 +117,7 @@ def get_auto_threshold(category: str, inferencer: TorchInferencer) -> dict:
 
     if scale_max <= scale_min:
         scale_max = scale_min + 1.0
-
+    # 將計算結果快取起來
     result = {"raw_thresh": raw_thresh, "scale_min": scale_min, "scale_max": scale_max}
     _auto_thresholds[category] = result
     return result
@@ -135,8 +125,7 @@ def get_auto_threshold(category: str, inferencer: TorchInferencer) -> dict:
 
 def get_category_images(category: str) -> list:
     """
-    獲取類別圖庫清單
-    掃描指定類別的測試資料夾，回傳打亂順序後的相對路徑陣列，供前端進行抽樣。
+    從測試資料夾中，隨機抽樣所有分類資料夾中的圖片，並回傳該圖片的路徑
     """
     test_dir = os.path.join(DATASET_ROOT, category, "test")
     if not os.path.exists(test_dir):
@@ -150,8 +139,7 @@ def get_category_images(category: str) -> list:
 
 def predict_specific_image(category: str, file_path: str) -> dict:
     """
-    核心推論引擎 (Core Inference Engine)
-    執行單張圖片的異常檢測，包含 AI 推論、分數正規化、以及 CV 後處理 (熱力圖與特徵定位)。
+    執行圖片的異常檢測
     """
     try:
         inferencer = get_inferencer(category)
@@ -170,24 +158,22 @@ def predict_specific_image(category: str, file_path: str) -> dict:
     if img is None:
         raise HTTPException(status_code=500, detail="讀取圖片失敗")
 
-    # 備份原始圖片轉 Base64
+    # 將原始圖片轉 Base64
     _, buffer_orig = cv2.imencode(".jpg", img)
+    # 並且解碼為 UTF-8 字串，顯示圖片
     orig_base64 = base64.b64encode(buffer_orig).decode("utf-8")
 
-    # ==========================================
-    # 1. AI 模型推論與效能監控
-    # ==========================================
+    # 計算推論時間
     start_time = time.time()
     predictions = inferencer.predict(image=img)
     inference_time_ms = int((time.time() - start_time) * 1000)
 
+    # 取得異常分數並轉換為百分比，越高代表越可能是瑕疵品
     raw_score = predictions.pred_score.item() * 100
     true_folder = os.path.dirname(file_path)
     is_true_good = true_folder.lower() == "good"
 
-    # ==========================================
-    # 2. 產線模擬控制 (引入極微小的固定誤差率)
-    # ==========================================
+    # 模擬真實產品檢測 (引入極微小的固定誤差率，模擬過殺跟漏檢情況，讓報表看起來更真實)
     if PORTFOLIO_DEMO_MODE:
         prob = get_deterministic_prob(file_path)
         if is_true_good:
@@ -199,17 +185,16 @@ def predict_specific_image(category: str, file_path: str) -> dict:
             if prob < 0.025:  # 2.5% 固定漏檢率
                 raw_score = max(0.1, raw_thresh - 0.5 - (prob * 50))
 
-    # ==========================================
-    # 3. 兩極化線性定錨正規化 (Polarized Normalization)
-    # 將模糊的分數強制推向 0% 或 100% 兩端，並將門檻死鎖在 50%
-    # ==========================================
+    # 將原始分數根據門檻與上下線進行非線性正規化，轉換為 0.1 ~ 99.9 的百分比分數
     if raw_score <= raw_thresh:
+        # 分數低於動態門檻，讓良品分數更集中在低分區
         range_val = raw_thresh - scale_min
         if range_val <= 0:
             range_val = 1e-5
         ratio = max(0, (raw_score - scale_min) / range_val)
         norm_score = (ratio**3) * 49.9
     else:
+        # 分數高於動態門檻，讓瑕疵分數更集中在高分區
         range_val = scale_max - raw_thresh
         if range_val <= 0:
             range_val = 1e-5
@@ -220,16 +205,13 @@ def predict_specific_image(category: str, file_path: str) -> dict:
     is_defective = raw_score > raw_thresh
     pred_label = "檢測異常 (NG)" if is_defective else "檢測正常 (OK)"
 
-    # ==========================================
-    # 4. CV 電腦視覺後處理 (特徵定位與熱力圖渲染)
-    # ==========================================
     heatmap_base64 = ""
+    # 渲染熱力圖跟定位紅圈圖
     result_img = img.copy()
-
     if hasattr(predictions, "anomaly_map") and predictions.anomaly_map is not None:
         amap = predictions.anomaly_map.squeeze().cpu().numpy()
 
-        # 4-A. 渲染半透明彩色熱力圖 (Heatmap)
+        # 渲染彩色熱力圖
         amap_norm = (amap - amap.min()) / (amap.max() - amap.min() + 1e-9)
         amap_uint8 = (amap_norm * 255).astype(np.uint8)
         heatmap_color = cv2.applyColorMap(amap_uint8, cv2.COLORMAP_JET)
@@ -238,15 +220,15 @@ def predict_specific_image(category: str, file_path: str) -> dict:
         _, buffer_hm = cv2.imencode(".jpg", overlay_heatmap)
         heatmap_base64 = base64.b64encode(buffer_hm).decode("utf-8")
 
-        # 4-B. 若為瑕疵品，繪製精確定位紅圈 (Contour)
+        # 若為瑕疵品，繪製精確定位紅圈
         if is_defective:
             amap_percent_map = (amap / (amap.max() + 1e-9)) * 100
 
-            # 使用高門檻擷取核心瑕疵區域
+            # 只抓出熱力圖中，異常程度高於 78% 的核心區域
             binary_mask = (amap_percent_map > 78.0).astype(np.uint8) * 255
 
             if np.any(binary_mask):
-                # 形態學閉運算 (Morphological Closing)：縫合破碎的鄰近瑕疵特徵
+                # 形態學閉運算：把旁邊碎掉的小點點「黏」在一起，變成一個完整的區塊
                 kernel = np.ones((11, 11), np.uint8)
                 binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
                 binary_mask_resized = cv2.resize(
@@ -255,7 +237,9 @@ def predict_specific_image(category: str, file_path: str) -> dict:
 
                 # 提取輪廓並過濾微小雜訊點
                 contours, _ = cv2.findContours(
-                    binary_mask_resized, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                    binary_mask_resized,
+                    cv2.RETR_EXTERNAL,
+                    cv2.CHAIN_APPROX_SIMPLE,
                 )
                 valid_contours = [c for c in contours if cv2.contourArea(c) > 30]
 
@@ -266,7 +250,7 @@ def predict_specific_image(category: str, file_path: str) -> dict:
         # 若模型未提供熱力圖，則回傳原圖
         heatmap_base64 = orig_base64
 
-    # 將繪製完成的結果圖轉 Base64
+    # 將繪製完成的結果圖轉 Base64，才能傳給前端的JSON讀取
     _, buffer_res = cv2.imencode(".jpg", result_img)
     res_base64 = base64.b64encode(buffer_res).decode("utf-8")
 
